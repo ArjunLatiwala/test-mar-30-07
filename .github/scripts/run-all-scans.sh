@@ -220,8 +220,9 @@ if [ "${SONAR_REACHABLE}" = "true" ]; then
 
     log "Polling SonarQube background task..."
     for i in $(seq 1 12); do
-      RAW_RESP=$(curl -s -u "${SONAR_TOKEN}:" \
-        "${SONAR_HOST_URL}/api/ce/component?component=${SONAR_PROJECT_KEY}")
+      RAW_RESP=$(curl -s --connect-timeout 15 --max-time 20 \
+        -u "${SONAR_TOKEN}:" \
+        "${SONAR_HOST_URL}/api/ce/component?component=${SONAR_PROJECT_KEY}" 2>/dev/null || echo "{}")
       STATUS=$(echo "${RAW_RESP}" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
       if [ -z "${STATUS}" ]; then
         STATUS="UNKNOWN"
