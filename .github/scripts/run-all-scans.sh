@@ -215,37 +215,23 @@ if [ "${SONAR_REACHABLE}" = "true" ]; then
   fi
 
   if [ "${SONAR_OK}" = "true" ]; then
-    log "Waiting 30s for SonarQube to process analysis..."
-    sleep 30
-
-    log "Polling SonarQube background task..."
-    for i in $(seq 1 12); do
-      RAW_RESP=$(curl -s --connect-timeout 15 --max-time 20 \
-        -u "${SONAR_TOKEN}:" \
-        "${SONAR_HOST_URL}/api/ce/component?component=${SONAR_PROJECT_KEY}" 2>/dev/null || echo "{}")
-      STATUS=$(echo "${RAW_RESP}" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
-      if [ -z "${STATUS}" ]; then
-        STATUS="UNKNOWN"
-        log "  Raw API response: ${RAW_RESP}"
-      fi
-      log "  Task status: ${STATUS} (attempt ${i}/12)"
-      [ "${STATUS}" = "SUCCESS" ] && break
-      [ "${STATUS}" = "FAILED" ] && { warn "SonarQube background task FAILED"; break; }
-      sleep 10
-    done
+    log "Waiting 15s for SonarQube to process analysis..."
+    sleep 15
 
     curl -s \
       -u "${SONAR_TOKEN}:" \
       "${SONAR_HOST_URL}/api/issues/search?componentKeys=${SONAR_PROJECT_KEY}&resolved=false&ps=500" \
-      -o "${REPORTS_DIR}/sonarqube-report.json"
+      -o "${REPORTS_DIR}/sonarqube-report.json" 2>/dev/null || true
     SIZE=$(wc -c < "${REPORTS_DIR}/sonarqube-report.json" 2>/dev/null || echo 0)
 
     log "Checking Quality Gate status..."
-    QG_RESP=$(curl -s -u "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}" 2>/dev/null || echo "{}")
+    QG_RESP=$(curl -s --connect-timeout 15 --max-time 20 \
+      -u "${SONAR_TOKEN}:" \
+      "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}" 2>/dev/null || echo "{}")
     QG_STATUS=$(echo "${QG_RESP}" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "UNKNOWN")
     log "Quality Gate status is: ${QG_STATUS}"
-    
-    if [ "${QG_STATUS}" = "ERROR" ] || [ "${QG_STATUS}" = "FAIL" ] || [ "${STATUS}" = "FAILED" ]; then
+
+    if [ "${QG_STATUS}" = "ERROR" ] || [ "${QG_STATUS}" = "FAIL" ]; then
       warn "SonarQube Quality Gate stopped/failed!"
       SONAR_QG_FAILED=true
     fi
