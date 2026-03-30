@@ -19,7 +19,7 @@ app.get('/api/tasks', (req, res) => {
 
 // 3. Get Single Task
 app.get('/api/tasks/:id', (req, res) => {
-    const task = tasks.find(t => t.id === parseInt(req.params.id));
+        const task = tasks.find(t => t.id === parseInt(req.params.id));
     if (!task) return res.status(404).json({ message: 'Task not found' });
     res.json(task);
 });
