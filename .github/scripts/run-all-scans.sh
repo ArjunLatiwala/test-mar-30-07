@@ -19,6 +19,7 @@ IMPORT_COUNT=0
 FINAL_FORMAT="none"
 DOJO_IMPORT_FAILED=false
 SONAR_QG_FAILED=false
+UNIT_TEST_FAILED=false
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 mkdir -p "${REPORTS_DIR}"
@@ -63,6 +64,8 @@ DEFECTDOJO_URL=$(echo "${DEFECTDOJO_URL}" | tr -d '\r\n ')
 DEFECTDOJO_API_KEY=$(echo "${DEFECTDOJO_API_KEY}" | tr -d '\r\n ')
 DEFECTDOJO_ENGAGEMENT_ID=$(echo "${DEFECTDOJO_ENGAGEMENT_ID}" | tr -d '\r\n ')
 DEFECTDOJO_PRODUCT_ID=$(echo "${DEFECTDOJO_PRODUCT_ID}" | tr -d '\r\n ')
+export POSTMAN_API_KEY=$(echo "${POSTMAN_API_KEY:-}" | tr -d '\r\n ')
+export COLLECTION_UID=$(echo "${COLLECTION_UID:-}" | tr -d '\r\n ')
 
 # ── Normalize URLs ───────────────────────────────────────────────────────────
 if [[ ! "${SONAR_HOST_URL}" =~ ^https?:// ]]; then
@@ -293,8 +296,8 @@ if [ "${SONAR_QG_FAILED:-false}" = "false" ] && [ "${SONAR_RESULT}" = "passed" ]
       if ${TEST_CMD}; then
         ok "Unit tests passed successfully!"
       else
-        fail "Unit tests failed!"
-        exit 1
+        fail "Unit tests failed! They will be reported as failed at the end of the pipeline."
+        UNIT_TEST_FAILED=true
       fi
     else
       warn "No package.json found in root. Cannot run npm install/test."
@@ -469,5 +472,10 @@ ok "Done. Report will be uploaded as GitHub artifact."
 
 if [ "${SONAR_QG_FAILED}" = "true" ]; then
   fail "Failing pipeline: SonarQube Quality Gate checks did not pass."
+  exit 1
+fi
+
+if [ "${UNIT_TEST_FAILED}" = "true" ]; then
+  fail "Failing pipeline: Unit tests failed during execution."
   exit 1
 fi
