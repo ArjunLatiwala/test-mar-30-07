@@ -279,6 +279,8 @@ if [ "${SONAR_QG_FAILED:-false}" = "false" ] && [ "${SONAR_RESULT}" = "passed" ]
         TEST_CMD="npm run test:smoke"
       elif grep -q '"test":' package.json; then
         TEST_CMD="npm test"
+       elif grep -q '"npm run test":' package.json; then
+        TEST_CMD="npm run test"
       else
         warn "Could not find a test script in package.json. Defaulting to 'npm test'"
         TEST_CMD="npm test"
@@ -321,19 +323,35 @@ if [ "${SONAR_QG_FAILED:-false}" = "false" ] && [ "${SONAR_RESULT}" = "passed" ]
         done
 
         if [ "${SERVER_READY}" = "false" ]; then
-          warn "Server did not start in time. Newman tests may fail."
-          warn "Server log:"
-          cat "${REPORTS_DIR}/server.log" 2>/dev/null || true
+          warn "Server did not respond after 30s."
+        fi
+
+        # Always print what port is listening and the server log for diagnostics
+        log "Port 3000 listener check:"
+        ss -tlnp 2>/dev/null | grep ':3000' || netstat -tlnp 2>/dev/null | grep ':3000' || log "  (no listener found on port 3000)"
+
+        log "--- Server Log (${REPORTS_DIR}/server.log) ---"
+        cat "${REPORTS_DIR}/server.log" 2>/dev/null || log "  (no server log found)"
+        log "--- End Server Log ---"
+
+        # Critical: check if server process is still alive
+        if [ -n "${SERVER_PID}" ] && ! kill -0 "${SERVER_PID}" 2>/dev/null; then
+          fail "Server process (PID ${SERVER_PID}) crashed before tests could run!"
+          fail "Newman tests SKIPPED due to server crash. Check server log above."
+          UNIT_TEST_FAILED=true
+          SERVER_PID=""   # clear so we don't try to kill a dead process
         fi
       fi
 
       # ── Run the tests ──────────────────────────────────────────────────────
-      log "Executing tests: ${TEST_CMD}"
-      if ${TEST_CMD}; then
-        ok "Unit tests passed successfully!"
-      else
-        fail "Unit tests failed! They will be reported as failed at the end of the pipeline."
-        UNIT_TEST_FAILED=true
+      if [ "${UNIT_TEST_FAILED}" = "false" ]; then
+        log "Executing tests: ${TEST_CMD}"
+        if ${TEST_CMD}; then
+          ok "Unit tests passed successfully!"
+        else
+          fail "Unit tests failed! They will be reported as failed at the end of the pipeline."
+          UNIT_TEST_FAILED=true
+        fi
       fi
 
       # ── Shut down app server ───────────────────────────────────────────────
