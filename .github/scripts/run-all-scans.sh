@@ -268,8 +268,13 @@ if [ "${SONAR_QG_FAILED:-false}" = "false" ] && [ "${SONAR_RESULT}" = "passed" ]
       npm install --no-audit --no-fund --legacy-peer-deps > npm-install.log 2>&1 || warn "npm install warnings, proceeding anyway..."
 
       # Detect test command from package.json
+      NEEDS_SERVER=false
       if grep -q '"test:all":' package.json; then
         TEST_CMD="npm run test:all"
+        NEEDS_SERVER=true
+      elif grep -q '"test:newman":' package.json; then
+        TEST_CMD="npm run test:newman"
+        NEEDS_SERVER=true
       elif grep -q '"test:smoke":' package.json; then
         TEST_CMD="npm run test:smoke"
       elif grep -q '"test":' package.json; then
@@ -279,12 +284,64 @@ if [ "${SONAR_QG_FAILED:-false}" = "false" ] && [ "${SONAR_RESULT}" = "passed" ]
         TEST_CMD="npm test"
       fi
 
+      # ── Start app server if Newman/API tests are required ──────────────────
+      SERVER_PID=""
+      if [ "${NEEDS_SERVER}" = "true" ]; then
+        log "Newman/API tests detected — starting application server in background..."
+
+        # Detect start command
+        if grep -q '"start":' package.json; then
+          START_CMD="npm start"
+        elif grep -q '"serve":' package.json; then
+          START_CMD="npm run serve"
+        else
+          START_CMD="node src/server.js"
+          warn "No 'start' script found in package.json — falling back to: ${START_CMD}"
+        fi
+
+        log "Starting server with: ${START_CMD}"
+        ${START_CMD} > "${REPORTS_DIR}/server.log" 2>&1 &
+        SERVER_PID=$!
+        log "Server started with PID ${SERVER_PID}"
+
+        # Wait up to 30s for port 3000 to be ready
+        log "Waiting for server to be ready on port 3000..."
+        SERVER_READY=false
+        for attempt in $(seq 1 15); do
+          if curl -s --connect-timeout 2 --max-time 3 \
+              "http://localhost:3000" > /dev/null 2>&1 || \
+             curl -s --connect-timeout 2 --max-time 3 \
+              "http://localhost:3000/health" > /dev/null 2>&1; then
+            ok "Server is ready (attempt ${attempt}/15)"
+            SERVER_READY=true
+            break
+          fi
+          log "  Waiting for server... (attempt ${attempt}/15)"
+          sleep 2
+        done
+
+        if [ "${SERVER_READY}" = "false" ]; then
+          warn "Server did not start in time. Newman tests may fail."
+          warn "Server log:"
+          cat "${REPORTS_DIR}/server.log" 2>/dev/null || true
+        fi
+      fi
+
+      # ── Run the tests ──────────────────────────────────────────────────────
       log "Executing tests: ${TEST_CMD}"
       if ${TEST_CMD}; then
         ok "Unit tests passed successfully!"
       else
         fail "Unit tests failed! They will be reported as failed at the end of the pipeline."
         UNIT_TEST_FAILED=true
+      fi
+
+      # ── Shut down app server ───────────────────────────────────────────────
+      if [ -n "${SERVER_PID}" ]; then
+        log "Stopping application server (PID ${SERVER_PID})..."
+        kill "${SERVER_PID}" 2>/dev/null || true
+        wait "${SERVER_PID}" 2>/dev/null || true
+        ok "Application server stopped."
       fi
     else
       warn "No package.json found in root. Cannot run npm install/test."
