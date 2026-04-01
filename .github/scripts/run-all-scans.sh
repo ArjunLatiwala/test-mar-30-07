@@ -456,17 +456,15 @@ if [ -n "${SERVER_PID:-}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
     REMOTE_CMD="mkdir -p /tmp/zap_pipe && /home/husaintrivedi/ZAP_2.17.0/zap.sh \
     -Xmx512m -dir /tmp/zap_pipe -cmd \
     -quickurl http://localhost:3000 \
-    /home/husaintrivedi/zap-report.json"
-
-    
+    -quickout /home/husaintrivedi/zap-report.html"
     log "Executing ZAP on GCP with isolated directory..."
     ssh -i ~/.ssh/id_gcp -R 3000:localhost:3000 "${GCP_USER}@${GCP_IP}" "$REMOTE_CMD" || warn "ZAP found issues"
 
     # 2. Download the report from your GCP server to the GitHub Runner
     log "Downloading report from GCP..."
-    scp -i ~/.ssh/id_gcp "${GCP_USER}@${GCP_IP}:/home/husaintrivedi/zap-report.json" "${REPORTS_DIR}/zap-report.json"
+    scp -i ~/.ssh/id_gcp "${GCP_USER}@${GCP_IP}:/home/husaintrivedi/zap-report.html" "${REPORTS_DIR}/zap-report.html"
 
-    if [ -f "${REPORTS_DIR}/zap-report.json" ]; then
+    if [ -f "${REPORTS_DIR}/zap-report.html" ]; then
         ok "ZAP report successfully retrieved from GCP."
         ZAP_RESULT="passed"
     else
@@ -532,7 +530,7 @@ do_import \
   "SonarQube" || true
 
 do_import \
-  "${REPORTS_DIR}/zap-report.json" \
+  "${REPORTS_DIR}/zap-report.html" \
   "ZAP Scan" \
   "OWASP ZAP" || true
 
