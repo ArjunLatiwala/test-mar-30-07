@@ -451,8 +451,14 @@ if [ -n "${SERVER_PID:-}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
     # ssh -i ~/.ssh/id_gcp -R 3000:localhost:3000 "${GCP_USER}@${GCP_IP}" \
       # "python3 /home/husaintrivedi/ZAP_2.17.0/zap-baseline.py -t http://localhost:3000 -J zap-report.json -m 1" || warn "ZAP finished with issues"
 
-    REMOTE_CMD="mkdir -p /tmp/zap_pipe && /home/husaintrivedi/ZAP_2.17.0/zap.sh -Xmx512m -dir /tmp/zap_pipe -cmd -quickurl http://localhost:3000 -quickout /home/husaintrivedi/zap-report.json -quickformat json"
+    # REMOTE_CMD="mkdir -p /tmp/zap_pipe && /home/husaintrivedi/ZAP_2.17.0/zap.sh -Xmx512m -dir /tmp/zap_pipe -cmd -quickurl http://localhost:3000 -quickout /home/husaintrivedi/zap-report.json -quickformat json"
 
+    REMOTE_CMD="mkdir -p /tmp/zap_pipe && /home/husaintrivedi/ZAP_2.17.0/zap.sh \
+    -Xmx512m -dir /tmp/zap_pipe -cmd \
+    -quickurl http://localhost:3000 \
+    /home/husaintrivedi/zap-report.json"
+
+    
     log "Executing ZAP on GCP with isolated directory..."
     ssh -i ~/.ssh/id_gcp -R 3000:localhost:3000 "${GCP_USER}@${GCP_IP}" "$REMOTE_CMD" || warn "ZAP found issues"
 
