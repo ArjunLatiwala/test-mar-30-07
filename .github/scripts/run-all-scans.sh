@@ -445,12 +445,15 @@ if [ -n "${SERVER_PID:-}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
     ssh-keyscan -H "${GCP_IP}" >> ~/.ssh/known_hosts
 # 
     # REMOTE_CMD="/home/husaintrivedi/ZAP_2.17.0/zap.sh -cmd -quickurl http://localhost:3000 -quickout /home/husaintrivedi/zap-report.json -quickformat json"
-    REMOTE_CMD="/home/husaintrivedi/ZAP_2.17.0/zap.sh -Xmx512m -cmd -quickurl http://localhost:3000 -quickout /home/husaintrivedi/zap-report.json -quickformat json"
+    # REMOTE_CMD="/home/husaintrivedi/ZAP_2.17.0/zap.sh -Xmx512m -cmd -quickurl http://localhost:3000 -quickout /home/husaintrivedi/zap-report.json -quickformat json"
     # 1. Start ZAP on GCP and tell it to look back at the GitHub Runner (Port 3000)
-    log "Telling GCP Server to run ZAP scan..."
-    ssh -i ~/.ssh/id_gcp -R 3000:localhost:3000 "${GCP_USER}@${GCP_IP}" \
-      "python3 /home/husaintrivedi/ZAP_2.17.0/zap-baseline.py -t http://localhost:3000 -J zap-report.json -m 1" || warn "ZAP finished with issues"
+    # log "Telling GCP Server to run ZAP scan..."
+    # ssh -i ~/.ssh/id_gcp -R 3000:localhost:3000 "${GCP_USER}@${GCP_IP}" \
+      # "python3 /home/husaintrivedi/ZAP_2.17.0/zap-baseline.py -t http://localhost:3000 -J zap-report.json -m 1" || warn "ZAP finished with issues"
 
+    log "Executing ZAP Java Engine on GCP..."
+    ssh -v -i ~/.ssh/id_gcp -R 3000:localhost:3000 "${GCP_USER}@${GCP_IP}" \
+      "/home/husaintrivedi/ZAP_2.17.0/zap.sh -Xmx512m -cmd -quickurl http://localhost:3000 -quickout /home/husaintrivedi/zap-report.json -quickformat json" || warn "ZAP found issues"
     # 2. Download the report from your GCP server to the GitHub Runner
     log "Downloading report from GCP..."
     scp -i ~/.ssh/id_gcp "${GCP_USER}@${GCP_IP}:/home/husaintrivedi/zap-report.json" "${REPORTS_DIR}/zap-report.json"
