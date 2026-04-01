@@ -429,45 +429,50 @@ fi
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# STEP 1.7 — OWASP ZAP Dynamic Scan (DAST)
+# STEP 1.7 — OWASP ZAP Remote Scan (via GCP Server)
 # ─────────────────────────────────────────────────────────────────────────────
 log "-------------------------------------------------------"
-log "STEP 1.7: OWASP ZAP Dynamic Scan"
+log "STEP 1.7: OWASP ZAP Remote Scan (Executing on GCP)"
 log "-------------------------------------------------------"
 
-# Check if the server we started for Newman is still running
 if [ -n "${SERVER_PID:-}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
-    log "Application server detected (PID ${SERVER_PID}). Starting ZAP Scan..."
-    
-    # We use the ZAP Python script to run a baseline scan against our local app
-    # -t: target URL (the app started for Newman)
-    # -g: generate a default config file
-    # -J: output report in JSON format for DefectDojo
-    
-    ZAP_PATH="${HOME}/ZAP_2.17.0"
-    
-    # Run ZAP Baseline scan (adjust the time/depth as needed)
-    # We use '|| true' because ZAP returns non-zero codes if it finds vulnerabilities
-    ${ZAP_PATH}/zap-baseline.py \
-        -t "http://localhost:3000" \
-        -J "zap-report.json" \
-        -m 1 || warn "ZAP scan finished (vulnerabilities may have been found)"
+    log "Application server detected. Setting up SSH for GCP..."
 
-    mv zap-report.json "${REPORTS_DIR}/zap-report.json"
-    ok "ZAP scan completed and report moved to ${REPORTS_DIR}"
-    ZAP_RESULT="passed"
+    # Create the key file on the GitHub Runner
+    mkdir -p ~/.ssh
+    echo "${GCP_SSH_KEY}" > ~/.ssh/id_gcp
+    chmod 600 ~/.ssh/id_gcp
+    ssh-keyscan -H "${GCP_IP}" >> ~/.ssh/known_hosts
+
+    # 1. Start ZAP on GCP and tell it to look back at the GitHub Runner (Port 3000)
+    log "Telling GCP Server to run ZAP scan..."
+    ssh -i ~/.ssh/id_gcp -R 3000:localhost:3000 "${GCP_USER}@${GCP_IP}" \
+      "python3 /home/husaintrivedi/ZAP_2.17.0/zap-baseline.py -t http://localhost:3000 -J zap-report.json -m 1" || warn "ZAP finished with issues"
+
+    # 2. Download the report from your GCP server to the GitHub Runner
+    log "Downloading report from GCP..."
+    scp -i ~/.ssh/id_gcp "${GCP_USER}@${GCP_IP}:/home/husaintrivedi/zap-report.json" "${REPORTS_DIR}/zap-report.json"
+
+    if [ -f "${REPORTS_DIR}/zap-report.json" ]; then
+        ok "ZAP report successfully retrieved from GCP."
+        ZAP_RESULT="passed"
+    else
+        fail "Failed to retrieve ZAP report."
+        ZAP_RESULT="failed"
+    fi
 else
-    warn "Application server is not running. Skipping ZAP Scan."
+    warn "Server not running. Skipping Remote ZAP Scan."
     ZAP_RESULT="skipped"
 fi
 
-# ── NOW we shut down the server ──────────────────────────────────────────────
+# ── SHUT DOWN SERVER ─────────────────────────────────────────────────────────
 if [ -n "${SERVER_PID:-}" ]; then
-    log "All dynamic tests (Newman + ZAP) complete. Stopping server (PID ${SERVER_PID})..."
+    log "Stopping app server (PID ${SERVER_PID})..."
     kill "${SERVER_PID}" 2>/dev/null || true
     wait "${SERVER_PID}" 2>/dev/null || true
     ok "Server stopped."
 fi
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 2 — Import to DefectDojo
