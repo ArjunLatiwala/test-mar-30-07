@@ -89,6 +89,9 @@ jobs:
           DEFECTDOJO_PRODUCT_ID:    ${{ secrets.DEFECTDOJO_PRODUCT_ID }}
           POSTMAN_API_KEY:          ${{ secrets.POSTMAN_API_KEY }}
           COLLECTION_UID:           ${{ secrets.COLLECTION_UID }}
+          GCP_SSH_KEY:              ${{ secrets.GCP_SSH_KEY }}  # These lines pass the secrets
+          GCP_IP:                   ${{ secrets.GCP_IP }}
+          GCP_USER:                 ${{ secrets.GCP_USER }}
         run: |
           export PATH="/usr/local/bin:/usr/bin:$PATH"
           bash ~/security-scan/scripts/run-all-scans.sh
