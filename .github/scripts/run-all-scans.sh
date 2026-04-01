@@ -443,9 +443,9 @@ if [ -n "${SERVER_PID:-}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
     echo "${GCP_SSH_KEY}" > ~/.ssh/id_gcp
     chmod 600 ~/.ssh/id_gcp
     ssh-keyscan -H "${GCP_IP}" >> ~/.ssh/known_hosts
-
-    REMOTE_CMD="/home/husaintrivedi/ZAP_2.17.0/zap.sh -cmd -quickurl http://localhost:3000 -quickout /home/husaintrivedi/zap-report.json -quickformat json"
-
+# 
+    # REMOTE_CMD="/home/husaintrivedi/ZAP_2.17.0/zap.sh -cmd -quickurl http://localhost:3000 -quickout /home/husaintrivedi/zap-report.json -quickformat json"
+    REMOTE_CMD="/home/husaintrivedi/ZAP_2.17.0/zap.sh -Xmx512m -cmd -quickurl http://localhost:3000 -quickout /home/husaintrivedi/zap-report.json -quickformat json"
     # 1. Start ZAP on GCP and tell it to look back at the GitHub Runner (Port 3000)
     log "Telling GCP Server to run ZAP scan..."
     ssh -i ~/.ssh/id_gcp -R 3000:localhost:3000 "${GCP_USER}@${GCP_IP}" \
