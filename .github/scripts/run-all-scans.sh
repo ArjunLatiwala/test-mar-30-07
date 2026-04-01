@@ -421,20 +421,53 @@ if [ "${SONAR_QG_FAILED:-false}" = "false" ] && [ "${SONAR_RESULT}" = "passed" ]
           warn "Newman tests failed — logged as warning. Pipeline continues."
         fi
       fi
-
-      # Shut down server
-      if [ -n "${SERVER_PID}" ]; then
-        log "Stopping server (PID ${SERVER_PID})..."
-        kill "${SERVER_PID}" 2>/dev/null || true
-        wait "${SERVER_PID}" 2>/dev/null || true
-        ok "Server stopped."
-      fi
     fi
   fi
 else
   warn "SonarQube Quality Gate did not pass (or scan failed). Skipping all tests."
 fi
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 1.7 — OWASP ZAP Dynamic Scan (DAST)
+# ─────────────────────────────────────────────────────────────────────────────
+log "-------------------------------------------------------"
+log "STEP 1.7: OWASP ZAP Dynamic Scan"
+log "-------------------------------------------------------"
+
+# Check if the server we started for Newman is still running
+if [ -n "${SERVER_PID:-}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
+    log "Application server detected (PID ${SERVER_PID}). Starting ZAP Scan..."
+    
+    # We use the ZAP Python script to run a baseline scan against our local app
+    # -t: target URL (the app started for Newman)
+    # -g: generate a default config file
+    # -J: output report in JSON format for DefectDojo
+    
+    ZAP_PATH="${HOME}/ZAP_2.17.0"
+    
+    # Run ZAP Baseline scan (adjust the time/depth as needed)
+    # We use '|| true' because ZAP returns non-zero codes if it finds vulnerabilities
+    ${ZAP_PATH}/zap-baseline.py \
+        -t "http://localhost:3000" \
+        -J "zap-report.json" \
+        -m 1 || warn "ZAP scan finished (vulnerabilities may have been found)"
+
+    mv zap-report.json "${REPORTS_DIR}/zap-report.json"
+    ok "ZAP scan completed and report moved to ${REPORTS_DIR}"
+    ZAP_RESULT="passed"
+else
+    warn "Application server is not running. Skipping ZAP Scan."
+    ZAP_RESULT="skipped"
+fi
+
+# ── NOW we shut down the server ──────────────────────────────────────────────
+if [ -n "${SERVER_PID:-}" ]; then
+    log "All dynamic tests (Newman + ZAP) complete. Stopping server (PID ${SERVER_PID})..."
+    kill "${SERVER_PID}" 2>/dev/null || true
+    wait "${SERVER_PID}" 2>/dev/null || true
+    ok "Server stopped."
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 2 — Import to DefectDojo
@@ -479,6 +512,11 @@ do_import \
   "${REPORTS_DIR}/sonarqube-report.json" \
   "SonarQube Scan" \
   "SonarQube" || true
+
+do_import \
+  "${REPORTS_DIR}/zap-report.json" \
+  "ZAP Scan" \
+  "OWASP ZAP" || true
 
 if [ "${IMPORT_COUNT}" -eq 0 ]; then
   warn "DefectDojo import failed — pipeline will continue and bundle raw reports"
